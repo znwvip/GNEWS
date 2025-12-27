@@ -108,3 +108,52 @@ def main():
   
 if __name__ == "__main__":  
     main()  
+
+# ...（前面的代码不变）...  
+  
+def main():  
+    # 创建docs目录（如果不存在）  
+    docs_dir = os.path.join(os.getcwd(), "docs")  
+    os.makedirs(docs_dir, exist_ok=True)  
+  
+    # 创建备份目录结构  
+    backup_dir = os.path.join(os.getcwd(), "backup")  
+    os.makedirs(backup_dir, exist_ok=True)  
+    print(f"[调试] 备份目录创建成功: {backup_dir}")  
+  
+    all_results = []  
+    update_time = get_beijing_time()  
+  
+    # ...（抓取数据的代码不变）...  
+  
+    payload = {  
+        "updated_at": update_time,  
+        "total": len(all_results),  
+        "items": all_results  
+    }  
+  
+    # 保存到docs/data.json（主文件）  
+    output_path = os.path.join(docs_dir, "data.json")  
+    with open(output_path, "w", encoding="utf-8") as f:  
+        json.dump(payload, f, ensure_ascii=False, indent=2)  
+  
+    # 备份功能  
+    beijing_time = datetime.now(timezone(timedelta(hours=8)))  
+    date_dir = beijing_time.strftime("%Y-%m-%d")  
+    backup_date_dir = os.path.join(backup_dir, date_dir)  
+    os.makedirs(backup_date_dir, exist_ok=True)  
+    print(f"[调试] 按日期创建备份目录: {backup_date_dir}")  
+      
+    # 文件名格式：年-月-日_时-分-秒.json  
+    backup_filename = f"{date_dir}_{beijing_time.strftime('%H-%M-%S')}.json"  
+    backup_path = os.path.join(backup_date_dir, backup_filename)  
+      
+    with open(backup_path, "w", encoding="utf-8") as f:  
+        json.dump(payload, f, ensure_ascii=False, indent=2)  
+  
+    print(f"\n[任务结束] 汇总 {len(all_results)} 条数据。北京时间: {update_time}")  
+    print(f"[备份完成] 备份至: {backup_path}")  
+    print(f"[调试] 备份文件大小: {os.path.getsize(backup_path)} 字节")  
+  
+if __name__ == "__main__":  
+    main()  
