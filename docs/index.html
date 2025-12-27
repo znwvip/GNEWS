@@ -1,193 +1,213 @@
-<!doctype html>
-<html lang="zh-CN" data-theme="dark">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GNEWS</title>
-  <style>
-    :root{
-      --bg:#0b1020; --fg:#e6edf3; --muted:#9aa4b2; --border:#20304a;
-      --card:#0f172a; --shadow:0 10px 28px rgba(0,0,0,.35);
-      --link:#7aa7ff; --btn:#3b82f6; --btnfg:#fff;
-      --chip:#111827; --chipfg:#cbd5e1;
-    }
-    html[data-theme="light"]{
-      --bg:#f6f8fa; --fg:#0f172a; --muted:#667085; --border:#e5e7eb;
-      --card:#ffffff; --shadow:0 10px 28px rgba(15,23,42,.10);
-      --link:#2563eb; --btn:#2563eb; --btnfg:#fff;
-      --chip:#f3f4f6; --chipfg:#334155;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0; background:var(--bg); color:var(--fg);
-      font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
-    }
-    header{
-      position:sticky; top:0; z-index:50;
-      background: color-mix(in srgb, var(--bg) 86%, transparent);
-      backdrop-filter: blur(10px) saturate(160%);
-      border-bottom:1px solid var(--border);
-    }
-    .bar{
-      height:56px; padding:0 12px; max-width:1200px; margin:0 auto;
-      display:flex; align-items:center; justify-content:space-between; gap:12px;
-    }
-    .title{display:flex; flex-direction:column; gap:2px; min-width:0}
-    .title strong{font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-    .title span{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-    .right{display:flex; align-items:center; gap:10px}
-    .chip{
-      font-size:12px; color:var(--chipfg); background:var(--chip);
-      border:1px solid var(--border); padding:6px 10px; border-radius:999px;
-    }
-    .btn{
-      border:1px solid var(--border); background:transparent; color:var(--fg);
-      padding:8px 10px; border-radius:10px; cursor:pointer;
-    }
-    .btn.primary{background:var(--btn); border-color:transparent; color:var(--btnfg)}
-    main{max-width:1200px; margin:0 auto; padding:14px 12px 30px}
-    .grid{
-      display:grid; gap:12px;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    @media (max-width: 900px){ .grid{grid-template-columns: 1fr;} .chip{display:none} }
-    .panel{
-      border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow);
-      border-radius:14px; overflow:hidden;
-    }
-    .panel-h{
-      padding:10px 12px; border-bottom:1px solid var(--border);
-      display:flex; align-items:center; justify-content:space-between; gap:10px;
-    }
-    .panel-h .name{font-weight:700}
-    .panel-h .count{color:var(--muted); font-size:12px}
-    .list{padding:8px 8px 10px}
-    .item{
-      display:flex; gap:10px; padding:8px 10px; border-radius:12px;
-    }
-    .item:hover{background: color-mix(in srgb, var(--card) 70%, var(--bg));}
-    .rank{
-      flex:0 0 28px; height:28px; line-height:28px; text-align:center;
-      border:1px solid var(--border); border-radius:10px; color:var(--muted);
-      font-size:12px;
-    }
-    a{color:var(--link); text-decoration:none}
-    a:hover{text-decoration:underline}
-    .meta{color:var(--muted); font-size:12px; margin-top:2px}
-    .empty{
-      padding:18px 12px; color:var(--muted);
-      border:1px dashed var(--border); border-radius:14px;
-      text-align:center;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <div class="bar">
-      <div class="title">
-        <strong>GNEWS</strong>
-        <span id="subtitle">加载中…</span>
-      </div>
-      <div class="right">
-        <span class="chip" id="status">数据：未加载</span>
-        <button class="btn" id="toggle">浅色</button>
-        <button class="btn primary" id="refresh">刷新</button>
-      </div>
-    </div>
-  </header>
-
-  <main>
-    <div id="content" class="grid"></div>
-    <div id="empty" class="empty" style="display:none">
-      没有数据。请检查 <code>docs/data.json</code> 是否存在，或稍后刷新。
-    </div>
-  </main>
-
-  <script>
-    const root = document.documentElement;
-    const toggleBtn = document.getElementById('toggle');
-    const refreshBtn = document.getElementById('refresh');
-    const statusEl = document.getElementById('status');
-    const subtitleEl = document.getElementById('subtitle');
-    const contentEl = document.getElementById('content');
-    const emptyEl = document.getElementById('empty');
-
-    function applyTheme(theme){
-      root.dataset.theme = theme;
-      localStorage.setItem('theme', theme);
-      toggleBtn.textContent = theme === 'dark' ? '浅色' : '深色';
-    }
-    applyTheme(localStorage.getItem('theme') || 'dark');
-
-    toggleBtn.addEventListener('click', () => {
-      applyTheme(root.dataset.theme === 'dark' ? 'light' : 'dark');
-    });
-
-    refreshBtn.addEventListener('click', () => load(true));
-
-    function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-
-    function render(data){
-      const updated = data.updated_at ? `更新时间：${data.updated_at}` : '更新时间：未知';
-      subtitleEl.textContent = `来源：newsnow（MVP阶段先用示例数据） · ${updated}`;
-      statusEl.textContent = `平台：${(data.platforms||[]).length} · 条目：${(data.items||[]).length}`;
-
-      const byPlatform = new Map();
-      for(const it of (data.items||[])){
-        const key = it.source || 'Unknown';
-        if(!byPlatform.has(key)) byPlatform.set(key, []);
-        byPlatform.get(key).push(it);
-      }
-
-      contentEl.innerHTML = '';
-      if(byPlatform.size === 0){
-        emptyEl.style.display = 'block';
-        return;
-      }
-      emptyEl.style.display = 'none';
-
-      for(const [platform, items] of byPlatform.entries()){
-        items.sort((a,b)=>(a.rank||999)-(b.rank||999));
-        const card = document.createElement('section');
-        card.className = 'panel';
-        card.innerHTML = `
-          <div class="panel-h">
-            <div class="name">${esc(platform)}</div>
-            <div class="count">${items.length} 条</div>
-          </div>
-          <div class="list">
-            ${items.slice(0, 30).map(it => `
-              <div class="item">
-                <div class="rank">${esc(it.rank ?? '-')}</div>
-                <div style="min-width:0">
-                  <div><a href="${esc(it.url||'#')}" target="_blank" rel="noopener noreferrer">${esc(it.title||'')}</a></div>
-                  <div class="meta">${esc(it.time || '')}</div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `;
-        contentEl.appendChild(card);
-      }
-    }
-
-    async function load(bustCache=false){
-      try{
-        statusEl.textContent = '数据：加载中…';
-        const url = './data.json' + (bustCache ? `?ts=${Date.now()}` : '');
-        const res = await fetch(url, { cache: 'no-store' });
-        if(!res.ok) throw new Error('HTTP ' + res.status);
-        const data = await res.json();
-        render(data);
-      }catch(e){
-        statusEl.textContent = '数据：加载失败';
-        subtitleEl.textContent = '请检查 docs/data.json 是否存在';
-        contentEl.innerHTML = '';
-        emptyEl.style.display = 'block';
-      }
-    }
-
-    load(false);
-  </script>
-</body>
-</html>
+<!doctype html>  
+<html lang="zh-CN" data-theme="dark">  
+<head>  
+  <meta charset="utf-8" />  
+  <meta name="viewport" content="width=device-width,initial-scale=1" />  
+  <title>GNEWS - 全网热搜聚合</title>  
+  <style>  
+    :root{  
+      --bg:#0b1020; --fg:#e6edf3; --muted:#9aa4b2; --border:#20304a;  
+      --card:#0f172a; --shadow:0 10px 28px rgba(0,0,0,.35);  
+      --link:#7aa7ff; --btn:#3b82f6; --btnfg:#fff;  
+      --chip:#111827; --chipfg:#cbd5e1;  
+    }  
+    html[data-theme="light"]{  
+      --bg:#f6f8fa; --fg:#0f172a; --muted:#667085; --border:#e5e7eb;  
+      --card:#ffffff; --shadow:0 10px 28px rgba(15,23,42,.10);  
+      --link:#2563eb; --btn:#2563eb; --btnfg:#fff;  
+      --chip:#f3f4f6; --chipfg:#334155;  
+    }  
+    *{box-sizing:border-box}  
+    body{  
+      margin:0; background:var(--bg); color:var(--fg);  
+      font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;  
+    }  
+    header{  
+      position:sticky; top:0; z-index:50;  
+      background: color-mix(in srgb, var(--bg) 86%, transparent);  
+      backdrop-filter: blur(10px) saturate(160%);  
+      border-bottom:1px solid var(--border);  
+    }  
+    .bar{  
+      height:56px; padding:0 12px; max-width:1200px; margin:0 auto;  
+      display:flex; align-items:center; justify-content:space-between; gap:12px;  
+    }  
+    .title{display:flex; flex-direction:column; gap:2px; min-width:0}  
+    .title strong{font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}  
+    .title span{font-size:12px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}  
+    .right{display:flex; align-items:center; gap:10px}  
+    .chip{  
+      font-size:12px; color:var(--chipfg); background:var(--chip);  
+      border:1px solid var(--border); padding:6px 10px; border-radius:999px;  
+    }  
+    .btn{  
+      border:1px solid var(--border); background:transparent; color:var(--fg);  
+      padding:8px 10px; border-radius:10px; cursor:pointer;  
+    }  
+    .btn.primary{background:var(--btn); border-color:transparent; color:var(--btnfg)}  
+    main{max-width:1200px; margin:0 auto; padding:14px 12px 30px}  
+    .grid{  
+      display:grid; gap:16px;  
+      grid-template-columns: repeat(2, minmax(0, 1fr));  
+    }  
+    @media (max-width: 900px){ .grid{grid-template-columns: 1fr;} .chip{display:none} }  
+    .panel{  
+      border:1px solid var(--border); background:var(--card); box-shadow:var(--shadow);  
+      border-radius:14px; overflow:hidden;  
+    }  
+    .panel-h{  
+      padding:10px 12px; border-bottom:1px solid var(--border);  
+      display:flex; align-items:center; justify-content:space-between; gap:10px;  
+    }  
+    .panel-h .name{font-weight:700; color: var(--link)}  
+    .panel-h .count{color:var(--muted); font-size:12px}  
+    .list{padding:8px 8px 10px}  
+    .item{  
+      display:flex; gap:10px; padding:8px 10px; border-radius:12px;  
+      transition: background 0.2s;  
+    }  
+    .item:hover{background: color-mix(in srgb, var(--card) 70%, var(--bg));}  
+    .rank{  
+      flex:0 0 28px; height:28px; line-height:28px; text-align:center;  
+      border:1px solid var(--border); border-radius:10px; color:var(--muted);  
+      font-size:11px; font-weight: bold;  
+    }  
+    .rank-1{color:#ff4d4f; border-color:#ff4d4f}  
+    .rank-2{color:#ff7a45; border-color:#ff7a45}  
+    .rank-3{color:#ffa940; border-color:#ffa940}  
+      
+    a{color:var(--fg); text-decoration:none; word-break: break-all;}  
+    a:hover{color:var(--link); text-decoration:underline}  
+    .meta{color:var(--muted); font-size:11px; margin-top:2px}  
+    .empty{  
+      padding:40px 12px; color:var(--muted);  
+      border:1px dashed var(--border); border-radius:14px;  
+      text-align:center; grid-column: 1 / -1;  
+    }  
+  </style>  
+</head>  
+<body>  
+  <header>  
+    <div class="bar">  
+      <div class="title">  
+        <strong>GNEWS 热搜聚合</strong>  
+        <span id="subtitle">正在同步全网热点…</span>  
+      </div>  
+      <div class="right">  
+        <span class="chip" id="status">状态：就绪</span>  
+        <button class="btn" id="toggle">浅色</button>  
+        <button class="btn primary" id="refresh">刷新</button>  
+      </div>  
+    </div>  
+  </header>  
+  
+  <main>  
+    <div id="content" class="grid"></div>  
+    <div id="empty" class="empty" style="display:none">  
+      <p>目前没有数据。</p>  
+      <p style="font-size:12px">请确认 GitHub Actions 是否运行成功，且 <code>docs/data.json</code> 已生成。</p>  
+    </div>  
+  </main>  
+  
+  <script>  
+    const root = document.documentElement;  
+    const toggleBtn = document.getElementById('toggle');  
+    const refreshBtn = document.getElementById('refresh');  
+    const statusEl = document.getElementById('status');  
+    const subtitleEl = document.getElementById('subtitle');  
+    const contentEl = document.getElementById('content');  
+    const emptyEl = document.getElementById('empty');  
+  
+    function applyTheme(theme){  
+      root.dataset.theme = theme;  
+      localStorage.setItem('theme', theme);  
+      toggleBtn.textContent = theme === 'dark' ? '浅色' : '深色';  
+    }  
+    applyTheme(localStorage.getItem('theme') || 'dark');  
+  
+    toggleBtn.addEventListener('click', () => {  
+      applyTheme(root.dataset.theme === 'dark' ? 'light' : 'dark');  
+    });  
+  
+    refreshBtn.addEventListener('click', () => load(true));  
+  
+    function esc(s){   
+      if(!s) return '';  
+      return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));   
+    }  
+  
+    function render(data){  
+      const items = data.items || [];  
+      const updated = data.updated_at || '刚刚';  
+        
+      subtitleEl.textContent = `最后更新：${updated}`;  
+        
+      const byPlatform = new Map();  
+      items.forEach(it => {  
+        const key = it.source || '其他';  
+        if(!byPlatform.has(key)) byPlatform.set(key, []);  
+        byPlatform.get(key).push(it);  
+      });  
+  
+      statusEl.textContent = `来源：${byPlatform.size} · 总计：${items.length}`;  
+  
+      contentEl.innerHTML = '';  
+      if(byPlatform.size === 0){  
+        emptyEl.style.display = 'block';  
+        return;  
+      }  
+      emptyEl.style.display = 'none';  
+  
+      // 按照平台名称排序显示  
+      const sortedPlatforms = Array.from(byPlatform.keys()).sort();  
+  
+      for(const platform of sortedPlatforms){  
+        const platformItems = byPlatform.get(platform);  
+        platformItems.sort((a,b) => (a.rank || 99) - (b.rank || 99));  
+  
+        const card = document.createElement('section');  
+        card.className = 'panel';  
+        card.innerHTML = `  
+          <div class="panel-h">  
+            <div class="name">${esc(platform)}</div>  
+            <div class="count">${platformItems.length} 条热议</div>  
+          </div>  
+          <div class="list">  
+            ${platformItems.slice(0, 25).map(it => {  
+              const r = it.rank || '-';  
+              const rankClass = r <= 3 ? `rank-${r}` : '';  
+              return `  
+              <div class="item">  
+                <div class="rank ${rankClass}">${esc(r)}</div>  
+                <div style="min-width:0">  
+                  <div><a href="${esc(it.url||'#')}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a></div>  
+                  <div class="meta">${esc(platform)} · ${esc(it.time.split(' ')[1] || '')}</div>  
+                </div>  
+              </div>  
+              `;  
+            }).join('')}  
+          </div>  
+        `;  
+        contentEl.appendChild(card);  
+      }  
+    }  
+  
+    async function load(bustCache=false){  
+      try{  
+        statusEl.textContent = '更新中...';  
+        const url = './data.json' + (bustCache ? `?ts=${Date.now()}` : '');  
+        const res = await fetch(url, { cache: 'no-store' });  
+        if(!res.ok) throw new Error('找不到数据文件');  
+        const data = await res.json();  
+        render(data);  
+      }catch(e){  
+        console.error(e);  
+        statusEl.textContent = '加载失败';  
+        emptyEl.style.display = 'block';  
+      }  
+    }  
+  
+    load(false);  
+  </script>  
+</body>  
+</html>  
