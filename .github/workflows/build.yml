@@ -37,8 +37,7 @@ jobs:
       - name: Build data.json
         env:
           NEWSNOW_BASE_URL: "https://newsnow.busiyi.world"
-          # 如果需要改 API 路径，优先改这里：
-          # NEWSNOW_API_URL: "https://newsnow.busiyi.world/api/xxx"
+          NEWSNOW_API_URL: "https://newsnow.busiyi.world/api/s"
         run: |
           python scripts/build.py
 
