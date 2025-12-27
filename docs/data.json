@@ -1,19 +1,5 @@
 {
-  "updated_at": "2025-12-27 11:27:08",
-  "platforms": [
-    "知乎",
-    "微博",
-    "百度热搜",
-    "bilibili 热搜",
-    "今日头条"
-  ],
-  "items": [],
-  "meta": {
-    "source": "newsnow",
-    "newsnow_base_url": "https://newsnow.busiyi.world",
-    "api_url": "https://newsnow.busiyi.world/api/s",
-    "platform_ok": 0,
-    "platform_fail": 5,
-    "note": "如果 items=0 或 fail 很高，说明：\n1) API 端点不对（请在 workflow 里设置 NEWSNOW_API_URL），或\n2) API 不支持 ?platform= 参数（需要换成按 source 拉取的方式）。\n查看 Actions 日志中的 [DEBUG] 输出即可定位。"
-  }
+  "updated_at": "2025-12-27 12:21:26",
+  "total": 0,
+  "items": []
 }
