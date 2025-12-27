@@ -1,51 +1,43 @@
-name: Build GNEWS
-
-on:
-  schedule:
-    # 北京时间 08:14–22:14，每小时一次
-    # GitHub Actions 使用 UTC，所以是 00:14–14:14
-    - cron: "14 0-14 * * *"
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-concurrency:
-  group: gnews-${{ github.ref_name }}
-  cancel-in-progress: false
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: "pip"
-
-      - name: Install deps
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Build data.json
-        env:
-          NEWSNOW_BASE_URL: "https://newsnow.busiyi.world"
-          NEWSNOW_API_URL: "https://newsnow.busiyi.world/api/s"
-        run: |
-          python scripts/build.py
-
-      - name: Commit and push
-        run: |
-          set -e
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/data.json
-          git commit -m "Update data.json" || echo "No changes to commit"
-          git push
+name: Build GNEWS  
+  
+on:  
+  schedule:  
+    # 北京时间 08:14–22:14，每小时一次  
+    - cron: "14 0-14 * * *"  
+  workflow_dispatch:  
+  
+permissions:  
+  contents: write  
+  
+jobs:  
+  build:  
+    runs-on: ubuntu-latest  
+    steps:  
+      - name: Checkout  
+        uses: actions/checkout@v4  
+  
+      - name: Set up Python  
+        uses: actions/setup-python@v5  
+        with:  
+          python-version: "3.11"  
+          cache: "pip"  
+  
+      - name: Install deps  
+        run: |  
+          python -m pip install --upgrade pip  
+          pip install -r requirements.txt  
+  
+      - name: Build data.json  
+        env:  
+          # 修正：这是 API 的根地址  
+          NEWSNOW_API_URL: "https://newsnow.busiyi.world/api"  
+        run: |  
+          python scripts/build.py  
+  
+      - name: Commit and push  
+        run: |  
+          git config user.name "github-actions[bot]"  
+          git config user.email "github-actions[bot]@users.noreply.github.com"  
+          git add docs/data.json  
+          git commit -m "Update data.json" || echo "No changes to commit"  
+          git push  
