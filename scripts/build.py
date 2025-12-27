@@ -10,7 +10,7 @@ import requests
 # -----------------------------  
 API_BASE_URL = "https://newsnow.busiyi.world/api/s"  
   
-# 扩展后的平台列表  
+# 平台列表  
 PLATFORMS = [  
     {"id": "zhihu", "name": "知乎"},  
     {"id": "weibo", "name": "微博"},  
@@ -32,7 +32,6 @@ DEFAULT_HEADERS = {
   
 def get_beijing_time():  
     """获取北京时间字符串"""  
-    # GitHub Actions 默认是 UTC 时间，我们需要 +8 变成北京时间  
     tz = timezone(timedelta(hours=8))  
     return datetime.now(tz).strftime("%Y-%m-%d %H:%M:%S")  
   
@@ -53,11 +52,15 @@ def fetch_data(pid, pname):
     return []  
   
 def main():  
+    # 创建docs目录（如果不存在）  
     docs_dir = os.path.join(os.getcwd(), "docs")  
     os.makedirs(docs_dir, exist_ok=True)  
   
+    # 创建备份目录结构  
+    backup_dir = os.path.join(os.getcwd(), "backup")  
+    os.makedirs(backup_dir, exist_ok=True)  
+  
     all_results = []  
-    # 获取准确的北京时间  
     update_time = get_beijing_time()  
   
     for p in PLATFORMS:  
@@ -74,7 +77,6 @@ def main():
                 "url": item.get("mobileUrl") or item.get("url") or "",  
                 "time": update_time  
             })  
-        # 稍微停顿，保护 API 站点的同时也防止被封  
         time.sleep(random.uniform(0.5, 1.2))  
   
     payload = {  
@@ -83,10 +85,26 @@ def main():
         "items": all_results  
     }  
   
-    with open(os.path.join(docs_dir, "data.json"), "w", encoding="utf-8") as f:  
+    # 保存到docs/data.json（主文件）  
+    output_path = os.path.join(docs_dir, "data.json")  
+    with open(output_path, "w", encoding="utf-8") as f:  
+        json.dump(payload, f, ensure_ascii=False, indent=2)  
+  
+    # 备份功能  
+    beijing_time = datetime.now(timezone(timedelta(hours=8)))  
+    date_dir = beijing_time.strftime("%Y-%m-%d")  
+    backup_date_dir = os.path.join(backup_dir, date_dir)  
+    os.makedirs(backup_date_dir, exist_ok=True)  
+      
+    # 文件名格式：年-月-日_时-分-秒.json  
+    backup_filename = f"{date_dir}_{beijing_time.strftime('%H-%M-%S')}.json"  
+    backup_path = os.path.join(backup_date_dir, backup_filename)  
+      
+    with open(backup_path, "w", encoding="utf-8") as f:  
         json.dump(payload, f, ensure_ascii=False, indent=2)  
   
     print(f"\n[任务结束] 汇总 {len(all_results)} 条数据。北京时间: {update_time}")  
+    print(f"[备份完成] 备份至: {backup_path}")  
   
 if __name__ == "__main__":  
     main()  
