@@ -1,0 +1,14 @@
+{
+  "updated_at": "示例数据（稍后接入 newsnow 自动更新）",
+  "platforms": ["知乎", "微博", "百度热搜", "bilibili 热搜"],
+  "items": [
+    {"source":"知乎","rank":1,"title":"示例：AI 大模型有哪些最新进展？","url":"https://www.zhihu.com/","time":"08:14"},
+    {"source":"知乎","rank":2,"title":"示例：比亚迪新动态","url":"https://www.zhihu.com/","time":"08:14"},
+    {"source":"微博","rank":1,"title":"示例：热点事件 A","url":"https://weibo.com/","time":"08:14"},
+    {"source":"微博","rank":2,"title":"示例：热点事件 B","url":"https://weibo.com/","time":"08:14"},
+    {"source":"百度热搜","rank":1,"title":"示例：今日热搜 1","url":"https://www.baidu.com/","time":"08:14"},
+    {"source":"百度热搜","rank":2,"title":"示例：今日热搜 2","url":"https://www.baidu.com/","time":"08:14"},
+    {"source":"bilibili 热搜","rank":1,"title":"示例：B站热搜 1","url":"https://www.bilibili.com/","time":"08:14"},
+    {"source":"bilibili 热搜","rank":2,"title":"示例：B站热搜 2","url":"https://www.bilibili.com/","time":"08:14"}
+  ]
+}
