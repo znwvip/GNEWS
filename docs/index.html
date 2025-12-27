@@ -83,6 +83,9 @@
     .empty{  
       padding:60px 20px; color:var(--muted); text-align:center; grid-column: 1 / -1;  
     }  
+    .error{  
+      padding:60px 20px; color:#ff4d4f; text-align:center; grid-column: 1 / -1;  
+    }  
   </style>  
 </head>  
 <body>  
@@ -103,7 +106,12 @@
   <main>  
     <div id="content" class="grid"></div>  
     <div id="empty" class="empty" style="display:none">  
-      加载失败，请检查 <code>data.json</code> 或稍后刷新。  
+      没有数据。请检查 <code>docs/data.json</code> 是否存在，或稍后刷新。  
+    </div>  
+    <div id="error" class="error" style="display:none">  
+      <h2>加载错误</h2>  
+      <p id="error-message">无法加载数据，请检查控制台获取详细信息。</p>  
+      <button class="btn primary" onclick="location.reload()">重新加载</button>  
     </div>  
   </main>  
   
@@ -115,6 +123,8 @@
     const subtitleEl = document.getElementById('subtitle');  
     const contentEl = document.getElementById('content');  
     const emptyEl = document.getElementById('empty');  
+    const errorEl = document.getElementById('error');  
+    const errorMessageEl = document.getElementById('error-message');  
   
     function applyTheme(theme){  
       root.dataset.theme = theme;  
@@ -135,58 +145,73 @@
     }  
   
     function render(data){  
-      const items = data.items || [];  
-      const updated = data.updated_at || '刚刚';  
-      subtitleEl.textContent = `最后更新 (北京时间)：${updated}`;  
-        
-      const byPlatform = new Map();  
-      items.forEach(it => {  
-        const key = it.source;  
-        if(!byPlatform.has(key)) byPlatform.set(key, []);  
-        byPlatform.get(key).push(it);  
-      });  
+      try {  
+        // 显示错误信息（如果有）  
+        if (data.error) {  
+          console.error(data.error);  
+          errorMessageEl.textContent = data.error;  
+          errorEl.style.display = 'block';  
+          return;  
+        }  
   
-      statusEl.textContent = `来源：${byPlatform.size} · 总计：${items.length}`;  
-      contentEl.innerHTML = '';  
-        
-      if(byPlatform.size === 0){  
-        emptyEl.style.display = 'block';  
-        return;  
-      }  
-      emptyEl.style.display = 'none';  
+        const items = data.items || [];  
+        const updated = data.updated_at || '刚刚';  
+        subtitleEl.textContent = `最后更新 (北京时间)：${updated}`;  
+          
+        const byPlatform = new Map();  
+        items.forEach(it => {  
+          const key = it.source;  
+          if(!byPlatform.has(key)) byPlatform.set(key, []);  
+          byPlatform.get(key).push(it);  
+        });  
   
-      // 按照我们定义的顺序显示，如果没有定义则排在后面  
-      const order = ["知乎", "微博", "百度热搜", "今日头条", "抖音热搜", "B站热搜", "贴吧", "财联社", "华尔街见闻", "澎湃新闻", "凤凰网"];  
-      const sortedKeys = Array.from(byPlatform.keys()).sort((a,b) => {  
-        let ia = order.indexOf(a), ib = order.indexOf(b);  
-        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);  
-      });  
+        statusEl.textContent = `来源：${byPlatform.size} · 总计：${items.length}`;  
+        contentEl.innerHTML = '';  
+          
+        if(byPlatform.size === 0){  
+          emptyEl.style.display = 'block';  
+          return;  
+        }  
+        emptyEl.style.display = 'none';  
+        errorEl.style.display = 'none';  
   
-      for(const platform of sortedKeys){  
-        const list = byPlatform.get(platform);  
-        const card = document.createElement('section');  
-        card.className = 'panel';  
-        card.innerHTML = `  
-          <div class="panel-h">  
-            <div class="name">${esc(platform)}</div>  
-            <div class="count">${list.length} 条</div>  
-          </div>  
-          <div class="list">  
-            ${list.slice(0, 20).map(it => {  
-              const r = it.rank || '-';  
-              const rankClass = r <= 3 ? `rank-${r}` : '';  
-              return `  
-              <div class="item">  
-                <div class="rank ${rankClass}">${esc(r)}</div>  
-                <div style="min-width:0">  
-                  <a href="${esc(it.url||'#')}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>  
+        // 按照我们定义的顺序显示  
+        const order = ["知乎", "微博", "百度热搜", "今日头条", "抖音热搜", "B站热搜", "贴吧", "财联社", "华尔街见闻", "澎湃新闻", "凤凰网"];  
+        const sortedKeys = Array.from(byPlatform.keys()).sort((a,b) => {  
+          let ia = order.indexOf(a), ib = order.indexOf(b);  
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);  
+        });  
+  
+        for(const platform of sortedKeys){  
+          const list = byPlatform.get(platform);  
+          const card = document.createElement('section');  
+          card.className = 'panel';  
+          card.innerHTML = `  
+            <div class="panel-h">  
+              <div class="name">${esc(platform)}</div>  
+              <div class="count">${list.length} 条</div>  
+            </div>  
+            <div class="list">  
+              ${list.slice(0, 20).map(it => {  
+                const r = it.rank || '-';  
+                const rankClass = r <= 3 ? `rank-${r}` : '';  
+                return `  
+                <div class="item">  
+                  <div class="rank ${rankClass}">${esc(r)}</div>  
+                  <div style="min-width:0">  
+                    <a href="${esc(it.url||'#')}" target="_blank" rel="noopener noreferrer">${esc(it.title)}</a>  
+                  </div>  
                 </div>  
-              </div>  
-              `;  
-            }).join('')}  
-          </div>  
-        `;  
-        contentEl.appendChild(card);  
+                `;  
+              }).join('')}  
+            </div>  
+          `;  
+          contentEl.appendChild(card);  
+        }  
+      } catch (e) {  
+        console.error('渲染错误:', e);  
+        errorMessageEl.textContent = `渲染错误: ${e.message}`;  
+        errorEl.style.display = 'block';  
       }  
     }  
   
@@ -195,11 +220,20 @@
         statusEl.textContent = '刷新中...';  
         const url = './data.json' + (bustCache ? `?ts=${Date.now()}` : '');  
         const res = await fetch(url, { cache: 'no-store' });  
+          
+        if (!res.ok) {  
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);  
+        }  
+          
         const data = await res.json();  
         render(data);  
       }catch(e){  
+        console.error('加载错误:', e);  
         statusEl.textContent = '加载失败';  
-        emptyEl.style.display = 'block';  
+        errorMessageEl.textContent = `加载失败: ${e.message}`;  
+        errorEl.style.display = 'block';  
+        emptyEl.style.display = 'none';  
+        contentEl.innerHTML = '';  
       }  
     }  
     load(false);  
