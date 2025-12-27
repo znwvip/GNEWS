@@ -1,5 +1,5 @@
 {
-  "updated_at": "2025-12-27 10:04:58",
+  "updated_at": "2025-12-27 10:31:06",
   "platforms": [
     "知乎",
     "微博",
@@ -11,9 +11,9 @@
   "meta": {
     "source": "newsnow",
     "newsnow_base_url": "https://newsnow.busiyi.world",
-    "api_url": "https://newsnow.busiyi.world/api/news",
+    "api_url": "https://newsnow.busiyi.world/api/s",
     "platform_ok": 0,
     "platform_fail": 5,
-    "note": "如果 items 为空或平台全失败，请检查 NEWSNOW_API_URL 是否正确（newsnow 的 API 路径可能不同）。"
+    "note": "如果 items=0 或 fail 很高，说明：\n1) API 端点不对（请在 workflow 里设置 NEWSNOW_API_URL），或\n2) API 不支持 ?platform= 参数（需要换成按 source 拉取的方式）。\n查看 Actions 日志中的 [DEBUG] 输出即可定位。"
   }
 }
