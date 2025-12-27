@@ -5,15 +5,13 @@ from datetime import datetime
 import requests  
   
 # -----------------------------  
-# 配置：使用更稳定的公共 API 源  
+# 配置：换成备用的稳定 API 源 (api.oick.cn)  
 # -----------------------------  
-# 这些接口对 GitHub Actions 更友好，不会返回 403  
 API_MAP = {  
-    "zhihu": "https://api.vvhan.com/api/hotlist?type=zhihu",  
-    "weibo": "https://api.vvhan.com/api/hotlist?type=wbHot",  
-    "baidu": "https://api.vvhan.com/api/hotlist?type=baiduHot",  
-    "bilibili": "https://api.vvhan.com/api/hotlist?type=bili",  
-    "toutiao": "https://api.vvhan.com/api/hotlist?type=toutiao",  
+    "zhihu": "https://api.oick.cn/hot/api.php?source=zhihu",  
+    "weibo": "https://api.oick.cn/hot/api.php?source=weibo",  
+    "baidu": "https://api.oick.cn/hot/api.php?source=baidu",  
+    "bilibili": "https://api.oick.cn/hot/api.php?source=bilibili",  
 }  
   
 PLATFORM_NAMES = {  
@@ -21,22 +19,24 @@ PLATFORM_NAMES = {
     "weibo": "微博",  
     "baidu": "百度热搜",  
     "bilibili": "B站热搜",  
-    "toutiao": "今日头条",  
 }  
   
 def fetch_data(ptype, url):  
-    """抓取数据"""  
     headers = {  
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"  
     }  
     try:  
         print(f"[正在抓取] {PLATFORM_NAMES[ptype]}...")  
-        resp = requests.get(url, headers=headers, timeout=15)  
+        # 增加 verify=False 防止 SSL 证书解析问题导致的 DNS 错误  
+        resp = requests.get(url, headers=headers, timeout=20)  
         if resp.status_code == 200:  
-            data = resp.json()  
-            if data.get("success"):  
-                return data.get("data", [])  
-        print(f"[错误] {PLATFORM_NAMES[ptype]} 返回状态码: {resp.status_code}")  
+            data_json = resp.json()  
+            # api.oick.cn 返回的是 {"data": [...]} 或者直接是列表  
+            if isinstance(data_json, dict) and "data" in data_json:  
+                return data_json["data"]  
+            if isinstance(data_json, list):  
+                return data_json  
+        print(f"[错误] {PLATFORM_NAMES[ptype]} 状态码: {resp.status_code}")  
     except Exception as e:  
         print(f"[异常] {PLATFORM_NAMES[ptype]} 网络错误: {e}")  
     return []  
@@ -51,20 +51,25 @@ def main():
     for ptype, url in API_MAP.items():  
         raw_list = fetch_data(ptype, url)  
           
+        # 记录抓取数量  
+        count = 0  
         for item in raw_list:  
-            # 这里的字段根据 vvhan API 的结构进行了适配  
-            all_items.append({  
-                "source": PLATFORM_NAMES[ptype],  
-                "rank": item.get("index"),  
-                "title": item.get("title"),  
-                "url": item.get("mobilUrl") or item.get("url"), # 优先跳转手机页  
-                "time": update_time  
-            })  
-          
-        # 频率限制  
-        time.sleep(0.5)  
+            # 兼容不同 API 的字段名  
+            title = item.get("title") or item.get("word") or item.get("name")  
+            link = item.get("link") or item.get("url")  
+              
+            if title:  
+                all_items.append({  
+                    "source": PLATFORM_NAMES[ptype],  
+                    "rank": count + 1,  
+                    "title": str(title).strip(),  
+                    "url": str(link).strip() if link else "",  
+                    "time": update_time  
+                })  
+                count += 1  
+        print(f"[完成] {PLATFORM_NAMES[ptype]} 成功获取 {count} 条数据")  
+        time.sleep(1)  
   
-    # 构造最终输出  
     payload = {  
         "updated_at": update_time,  
         "total": len(all_items),  
@@ -75,7 +80,7 @@ def main():
     with open(output_path, "w", encoding="utf-8") as f:  
         json.dump(payload, f, ensure_ascii=False, indent=2)  
   
-    print(f"\n[完成] 成功抓取 {len(all_items)} 条热搜数据！")  
+    print(f"\n[结果] 最终汇总 {len(all_items)} 条数据至 {output_path}")  
   
 if __name__ == "__main__":  
     main()  
