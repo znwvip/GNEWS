@@ -41,6 +41,11 @@ def safe_get(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
 
 def fetch_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
     r = requests.get(url, params=params, timeout=30)
+    ct = r.headers.get("content-type", "")
+    # 便于定位：如果不是 JSON，把前 200 字符打印出来
+    if "json" not in ct.lower():
+        print(f"[DEBUG] url={r.url} status={r.status_code} content-type={ct}")
+        print(f"[DEBUG] body_head={r.text[:200]!r}")
     r.raise_for_status()
     return r.json()
 
