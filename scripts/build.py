@@ -1,18 +1,18 @@
+# scripts/build.py
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
 
+# -----------------------------
+# Config
+# -----------------------------
+NEWSNOW_BASE_URL = os.getenv("NEWSNOW_BASE_URL", "https://newsnow.busiyi.world").rstrip("/")
 
-# 你可以在 Actions 里用环境变量覆盖这个地址
-NEWSNOW_BASE_URL = os.getenv("NEWSNOW_BASE_URL", "https://newsnow.busiyi.world")
-
-# 先用最常见的“聚合列表”端点写法占位。
-# 如果你的 API 实际端点不同，只需要改这里（见脚本底部的报错提示）
-API_URL = os.getenv("NEWSNOW_API_URL", f"{NEWSNOW_BASE_URL}/api/news")
-
+# 你也可以在 workflow 里显式设置 NEWSNOW_API_URL，绕过自动探测
+NEWSNOW_API_URL = os.getenv("NEWSNOW_API_URL", "").strip()
 
 PLATFORMS_DEFAULT = [
     {"id": "zhihu", "name": "知乎"},
@@ -22,12 +22,58 @@ PLATFORMS_DEFAULT = [
     {"id": "toutiao", "name": "今日头条"},
 ]
 
+# 一些常见“可能是 JSON API 的路径”候选。我们会逐个试探。
+API_CANDIDATES = [
+    "/api/news",
+    "/api/news.json",
+    "/api/v1/news",
+    "/api/v1/news.json",
+    "/news",
+    "/news.json",
+    "/v1/news",
+    "/v1/news.json",
+    "/api/sources",
+    "/api/v1/sources",
+]
 
-def now_beijing_str() -> str:
-    # 北京时间 = UTC+8
-    return datetime.now(timezone.utc).astimezone(
-        timezone.utc.replace(tzinfo=timezone.utc)
-    ).strftime("%Y-%m-%d %H:%M:%S")
+
+def fetch_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    """请求 JSON；如果返回不是 JSON，会打印 debug 头部帮助定位。"""
+    headers = {"Accept": "application/json"}
+    r = requests.get(url, params=params, timeout=30, headers=headers)
+    ct = (r.headers.get("content-type") or "").lower()
+
+    if "json" not in ct:
+        # 返回 HTML / 文本时，打印前 200 字符，帮助你定位真实 API
+        print(f"[DEBUG] url={r.url} status={r.status_code} content-type={ct}")
+        print(f"[DEBUG] body_head={r.text[:200]!r}")
+
+    r.raise_for_status()
+    return r.json()
+
+
+def pick_working_api(base_url: str) -> str:
+    """从候选路径里选一个真正返回 JSON 的 API 端点。"""
+    headers = {"Accept": "application/json"}
+    for path in API_CANDIDATES:
+        url = base_url + path
+        try:
+            r = requests.get(url, timeout=15, headers=headers)
+            ct = (r.headers.get("content-type") or "").lower()
+            if r.status_code == 200 and "json" in ct:
+                print(f"[OK] picked JSON API: {url} (content-type={ct})")
+                return url
+            else:
+                print(f"[DEBUG] candidate={url} status={r.status_code} content-type={ct}")
+        except Exception as e:
+            print(f"[DEBUG] candidate={url} error={e}")
+
+    raise RuntimeError(
+        "No JSON API endpoint found.\n"
+        "Please set NEWSNOW_API_URL explicitly in GitHub Actions env.\n"
+        "Example:\n"
+        "  NEWSNOW_API_URL: \"https://<your-endpoint>/api/xxx\""
+    )
 
 
 def safe_get(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
@@ -39,31 +85,29 @@ def safe_get(d: Dict[str, Any], keys: List[str], default: Any = None) -> Any:
     return cur
 
 
-def fetch_json(url: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    r = requests.get(url, params=params, timeout=30)
-    ct = r.headers.get("content-type", "")
-    # 便于定位：如果不是 JSON，把前 200 字符打印出来
-    if "json" not in ct.lower():
-        print(f"[DEBUG] url={r.url} status={r.status_code} content-type={ct}")
-        print(f"[DEBUG] body_head={r.text[:200]!r}")
-    r.raise_for_status()
-    return r.json()
-
-
-def normalize_items(raw: Any) -> List[Dict[str, Any]]:
+def normalize_items(raw: Any, fallback_source: str) -> List[Dict[str, Any]]:
     """
-    把 newsnow 返回的数据尽量“宽松地”归一化成：
+    把 API 返回尽量归一化为：
     {source, rank, title, url, time}
+
+    注意：newsnow 的实际字段结构可能不同。
+    这里做“宽松解析”，先让 MVP 跑通。
     """
     items: List[Dict[str, Any]] = []
 
-    # 允许 raw 是 dict 或 list；尽量找一个“列表型字段”
-    candidate_list = None
+    candidate_list: Optional[List[Any]] = None
     if isinstance(raw, list):
         candidate_list = raw
     elif isinstance(raw, dict):
-        # 常见可能：data/items/list/result 等
-        for path in (["data"], ["items"], ["list"], ["result"], ["data", "items"], ["data", "list"]):
+        for path in (
+            ["data"],
+            ["items"],
+            ["list"],
+            ["result"],
+            ["data", "items"],
+            ["data", "list"],
+            ["data", "result"],
+        ):
             v = safe_get(raw, path)
             if isinstance(v, list):
                 candidate_list = v
@@ -77,20 +121,26 @@ def normalize_items(raw: Any) -> List[Dict[str, Any]]:
             continue
 
         title = it.get("title") or it.get("name") or it.get("text") or ""
-        url = it.get("url") or it.get("link") or ""
+        url = it.get("url") or it.get("link") or it.get("href") or ""
         rank = it.get("rank") or it.get("index") or it.get("position")
-        source = it.get("source") or it.get("platform") or it.get("from") or it.get("source_name") or ""
-
-        # 时间字段可能很乱，先原样放
         time_str = it.get("time") or it.get("timestamp") or it.get("date") or ""
+
+        source = (
+            it.get("source")
+            or it.get("platform")
+            or it.get("from")
+            or it.get("source_name")
+            or fallback_source
+        )
 
         if not title:
             continue
 
+        # rank 有时是字符串，这里不强制转换，前端会按原样展示
         items.append(
             {
-                "source": str(source) if source else "Unknown",
-                "rank": rank if isinstance(rank, int) else rank,
+                "source": str(source),
+                "rank": rank,
                 "title": str(title),
                 "url": str(url),
                 "time": str(time_str),
@@ -106,23 +156,21 @@ def main() -> None:
 
     platforms = PLATFORMS_DEFAULT
 
-    # 这里先用一个“聚合接口”假设：GET /api/news?platform=xxx
+    api_url = NEWSNOW_API_URL or pick_working_api(NEWSNOW_BASE_URL)
+    print(f"[INFO] Using API URL: {api_url}")
+
     all_items: List[Dict[str, Any]] = []
     ok = 0
     fail = 0
 
+    # MVP：假设 API 支持 ?platform=xxx
+    # 如果不支持，会在 debug 输出里看到返回结构/错误，我们再调整请求方式。
     for p in platforms:
         pid = p["id"]
         pname = p["name"]
         try:
-            raw = fetch_json(API_URL, params={"platform": pid})
-            part = normalize_items(raw)
-
-            # 如果 source 为空，补上平台名
-            for x in part:
-                if x.get("source") in ("", "Unknown"):
-                    x["source"] = pname
-
+            raw = fetch_json(api_url, params={"platform": pid})
+            part = normalize_items(raw, fallback_source=pname)
             all_items.extend(part)
             ok += 1
         except Exception as e:
@@ -136,10 +184,15 @@ def main() -> None:
         "meta": {
             "source": "newsnow",
             "newsnow_base_url": NEWSNOW_BASE_URL,
-            "api_url": API_URL,
+            "api_url": api_url,
             "platform_ok": ok,
             "platform_fail": fail,
-            "note": "如果 items 为空或平台全失败，请检查 NEWSNOW_API_URL 是否正确（newsnow 的 API 路径可能不同）。",
+            "note": (
+                "如果 items=0 或 fail 很高，说明：\n"
+                "1) API 端点不对（请在 workflow 里设置 NEWSNOW_API_URL），或\n"
+                "2) API 不支持 ?platform= 参数（需要换成按 source 拉取的方式）。\n"
+                "查看 Actions 日志中的 [DEBUG] 输出即可定位。"
+            ),
         },
     }
 
