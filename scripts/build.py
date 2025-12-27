@@ -169,7 +169,7 @@ def main() -> None:
         pid = p["id"]
         pname = p["name"]
         try:
-            raw = fetch_json(api_url, params={"platform": pid})
+            raw = fetch_json(api_url, params={"s": pid})
             part = normalize_items(raw, fallback_source=pname)
             all_items.extend(part)
             ok += 1
